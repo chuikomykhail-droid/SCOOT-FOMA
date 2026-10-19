@@ -41,3 +41,5 @@ Thumbs.db
 
 # Local project context docs
 /context/
+
+*.slnx
