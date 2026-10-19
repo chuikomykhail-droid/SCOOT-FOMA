@@ -38,3 +38,6 @@ crashlytics-build.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Local project context docs
+/context/
