@@ -3,7 +3,8 @@
     "rootNamespace": "ScootFoma.Editor",
     "references": [
         "ScootFoma.Core",
-        "ScootFoma.Runtime"
+        "ScootFoma.Runtime",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

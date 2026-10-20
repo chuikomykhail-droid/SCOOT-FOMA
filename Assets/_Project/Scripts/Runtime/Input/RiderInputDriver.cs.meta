@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 26739b7857addb44cbb4a9aded41d24f
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - loop: {instanceID: 0}
+  - actions: {instanceID: 0}
+  - tuning: {instanceID: 0}
+  - replay: {fileID: 11400000, guid: e911fb2d0be772843a2cf87eb15a1d81, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

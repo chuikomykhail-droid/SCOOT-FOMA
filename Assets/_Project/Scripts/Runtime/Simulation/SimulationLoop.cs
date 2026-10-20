@@ -28,6 +28,11 @@ namespace ScootFoma.Simulation
         /// Доля шага, прошедшая после последнего Simulate. Для визуальной интерполяции.
         public float InterpolationAlpha { get; private set; }
 
+        /// Реальное время (Time.realtimeSinceStartupAsDouble), которому соответствует текущий тик.
+        /// Тики кадра идут подряд, но представляют моменты, разнесённые на dt: по этому времени
+        /// сэмплер интерполирует ввод между событиями геймпада.
+        public double CurrentTickRealtime { get; private set; }
+
         public float Speed { get => speed; set => speed = Mathf.Max(0f, value); }
         public bool Paused { get => paused; set => paused = value; }
         public int MaxTicksPerFrame { get => maxTicksPerFrame; set => maxTicksPerFrame = Mathf.Max(1, value); }
@@ -81,6 +86,8 @@ namespace ScootFoma.Simulation
 
         void Update()
         {
+            double now = Time.realtimeSinceStartupAsDouble;
+            CurrentTickRealtime = now;
             if (paused)
             {
                 InterpolationAlpha = 1f;
@@ -92,6 +99,8 @@ namespace ScootFoma.Simulation
             int ticks = 0;
             while (accumulator >= dt && ticks < maxTicksPerFrame)
             {
+                // Остаток аккумулятора после этого тика — насколько тик «позади» текущего момента.
+                CurrentTickRealtime = speed > 0f ? now - (accumulator - dt) / speed : now;
                 StepOnce();
                 accumulator -= dt;
                 ticks++;

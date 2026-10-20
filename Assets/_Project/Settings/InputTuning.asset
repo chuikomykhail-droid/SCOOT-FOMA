@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fef94ec94ff80574c81a10a1378278bd, type: 3}
+  m_Name: InputTuning
+  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Settings.InputTuningAsset
+  input:
+    leftStick:
+      innerDeadzone: 0.1
+      outerDeadzone: 0.95
+      exponent: 1
+    rightStick:
+      innerDeadzone: 0.1
+      outerDeadzone: 0.95
+      exponent: 1
+    leftTrigger:
+      deadzone: 0.05
+      outerDeadzone: 0.98
+    rightTrigger:
+      deadzone: 0.05
+      outerDeadzone: 0.98
+    flick:
+      edge: 0.7
+      centerRadius: 0.5
+      maxDuration: 0.12
+    latch:
+      mode: 0
+      recenterTime: 0.3
+      centerRadius: 0.15
+    clickFreezeTime: 0.06
+    velocityWindow: 0.017
+  intent:
+    rightTriggerOn: 0.6
+    rightTriggerOff: 0.4

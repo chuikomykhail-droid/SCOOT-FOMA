@@ -1,9 +1,13 @@
+using ScootFoma.Debugging;
+using ScootFoma.InputSources;
 using ScootFoma.Presentation;
+using ScootFoma.Settings;
 using ScootFoma.Simulation;
 using ScootFoma.Spikes;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace ScootFoma.Editor
 {
@@ -44,6 +48,38 @@ namespace ScootFoma.Editor
             railGo.layer = LayerMask.NameToLayer("Ground");
 
             Save(scene, $"{ScenesDir}/TestPark.unity");
+        }
+
+        const string InputActionsPath = "Assets/_Project/Input/ScootFoma.inputactions";
+        const string InputTuningPath = "Assets/_Project/Settings/InputTuning.asset";
+
+        /// Сцена этапа 1: ввод и намерения с отладочным HUD. Физики райдера пока нет.
+        [MenuItem("Scoot Foma/Build Input Lab")]
+        public static void BuildInputLab()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            Light();
+            Camera(new Vector3(0f, 1.5f, -4f));
+            var (loop, _) = Simulation();
+
+            var go = new GameObject("Rider Input");
+            var driver = go.AddComponent<RiderInputDriver>();
+            Assign(driver, ("loop", loop),
+                ("actions", AssetDatabase.LoadAssetAtPath<InputActionAsset>(InputActionsPath)),
+                ("tuning", InputTuning()));
+            var hud = go.AddComponent<IntentDebugHud>();
+            Assign(hud, ("driver", driver));
+            Save(scene, $"{ScenesDir}/InputLab.unity");
+        }
+
+        static InputTuningAsset InputTuning()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<InputTuningAsset>(InputTuningPath);
+            if (asset != null) return asset;
+            asset = ScriptableObject.CreateInstance<InputTuningAsset>();
+            AssetDatabase.CreateAsset(asset, InputTuningPath);
+            AssetDatabase.SaveAssets();
+            return asset;
         }
 
         [MenuItem("Scoot Foma/Spikes/Build S1 Grip Scene")]
