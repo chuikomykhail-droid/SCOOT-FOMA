@@ -57,6 +57,10 @@ namespace ScootFoma.Rig
         public DriveSettings knee = new DriveSettings(3000f, 300f, 4000f);
         public DriveSettings ankle = new DriveSettings(300f, 30f, 600f);
 
+        [Tooltip("Лимит каждой оси сферических суставов от позы сборки, градусы. 0 — без лимитов. " +
+                 "Временная заглушка: равномерные ±60° мешают приземлению (спайк S1), нужны анатомические диапазоны (этап 3).")]
+        public float sphericalLimit;
+
         public float footFriction = 1.0f;
     }
 
@@ -149,7 +153,30 @@ namespace ScootFoma.Rig
             all.Add(p.FootL); all.Add(p.FootR);
 
             p.All = all.ToArray();
+            if (s.sphericalLimit > 0f) LimitSphericals(p.All, s.sphericalLimit);
             return p;
+        }
+
+        /// Временная заглушка анатомических лимитов: одинаковый диапазон по всем осям сферических суставов.
+        static void LimitSphericals(ArticulationBody[] links, float limit)
+        {
+            foreach (var ab in links)
+            {
+                if (ab.isRoot || ab.jointType != ArticulationJointType.SphericalJoint) continue;
+                ab.twistLock = ArticulationDofLock.LimitedMotion;
+                ab.swingYLock = ArticulationDofLock.LimitedMotion;
+                ab.swingZLock = ArticulationDofLock.LimitedMotion;
+                ab.xDrive = WithLimits(ab.xDrive, limit);
+                ab.yDrive = WithLimits(ab.yDrive, limit);
+                ab.zDrive = WithLimits(ab.zDrive, limit);
+            }
+        }
+
+        static ArticulationDrive WithLimits(ArticulationDrive d, float limit)
+        {
+            d.lowerLimit = -limit;
+            d.upperLimit = limit;
+            return d;
         }
 
         static ArticulationBody Foot(string name, Transform parent, int layer, Vector3 ankleWorld, Quaternion rotation,

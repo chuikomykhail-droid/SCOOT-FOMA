@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using ScootFoma.Presentation;
 using ScootFoma.Rig;
 using ScootFoma.Simulation;
-using ScootFoma.Wheel;
 using UnityEngine;
 
 namespace ScootFoma.Spikes
@@ -20,7 +20,6 @@ namespace ScootFoma.Spikes
         public class Run
         {
             public string name;
-            public WheelModel wheelModel;
             public Test test;
             public bool interpolate = true;
         }
@@ -33,19 +32,20 @@ namespace ScootFoma.Spikes
 
         // CustomFriction отклонён по итогам спайка (раскачка от оценки нормальной силы по импульсам),
         // его можно вернуть в список для сравнения.
+        // Самокат-articulation с вращающимися колёсами. Поворот и прямая; три одинаковых прямых —
+        // отпечатки состояния должны совпасть побитово (реплеи ввода как регрессионные тесты).
         [SerializeField] List<Run> runs = new List<Run>
         {
-            new Run { name = "rolling straight", wheelModel = WheelModel.RollingContact, test = Test.Straight },
-            new Run { name = "rolling straight noInterp", wheelModel = WheelModel.RollingContact, test = Test.Straight, interpolate = false },
-            new Run { name = "rolling turn", wheelModel = WheelModel.RollingContact, test = Test.Turn },
-            new Run { name = "physical straight", wheelModel = WheelModel.PhysicalBody, test = Test.Straight },
-            new Run { name = "physical turn", wheelModel = WheelModel.PhysicalBody, test = Test.Turn },
+            new Run { name = "warmup", test = Test.Straight }, // не участвует в сравнении: первый прогон сессии
+            new Run { name = "turn", test = Test.Turn },
+            new Run { name = "straight #1", test = Test.Straight },
+            new Run { name = "straight #2", test = Test.Straight },
+            new Run { name = "straight #3", test = Test.Straight },
         };
         [Tooltip("Пол из отдельных плиток-коллайдеров вместо одного меша: демонстрирует «призрачные» удары на швах.")]
         [SerializeField] bool tiledGround;
 
         public ScooterBuildSettings scooter = new ScooterBuildSettings();
-        public WheelFrictionTuning wheels = new WheelFrictionTuning();
         [Header("Груз вместо райдера")]
         public float loadMass = 75f;
         public Vector3 loadCenterOfMass = new Vector3(0f, 0.8f, 0f);
@@ -64,8 +64,10 @@ namespace ScootFoma.Spikes
         struct Metrics
         {
             public Vector3 StartPos;
-            public float StartSpeed, MaxAbsX, VertSqSum, MaxVertAfterBump, YawRateSum, SpeedSum, LateralSqSum;
-            public int VertSamples, TurnSamples;
+            public float StartSpeed, MaxAbsX, VertSqSum, MaxVertAfterBump, YawRateSum, SpeedSum, LateralSqSum, SteerSum;
+            public int VertSamples, TurnSamples, Ticks;
+            // B: состояние деки с полной точностью в фиксированные тики
+            public string FingerprintBeforeBump, FingerprintEnd;
             // S2
             public float FrameSpeedSum, FrameSpeedSqSum;
             public int FrameSamples;
@@ -106,7 +108,7 @@ namespace ScootFoma.Spikes
             var root = new GameObject("S3 Ground").transform;
             int groundLayer = LayerMask.NameToLayer("Ground");
             var mat = ScooterRigBuilder.Material("Ground", 0.9f);
-            const int minX = -12, maxX = 6, minZ = -6, maxZ = 36;
+            const int minX = -20, maxX = 20, minZ = -10, maxZ = 36; // круг поворота R≈4 м с центром на x≈±4 обязан помещаться
             if (tiledGround)
             {
                 for (int x = minX; x < maxX; x++)
@@ -132,8 +134,8 @@ namespace ScootFoma.Spikes
             visual.name = "Ground (visual)";
             Destroy(visual.GetComponent<Collider>());
             visual.transform.SetParent(root, false);
-            visual.transform.position = new Vector3(-3f, -0.051f, 15f);
-            visual.transform.localScale = new Vector3(18f, 0.1f, 42f);
+            visual.transform.position = new Vector3(0f, -0.051f, 13f);
+            visual.transform.localScale = new Vector3(40f, 0.1f, 46f);
             if (groundMaterial != null) visual.GetComponent<Renderer>().sharedMaterial = groundMaterial;
 
             // Бугор: лежащая капсула, торчащая из пола на bumpHeight
@@ -189,17 +191,18 @@ namespace ScootFoma.Spikes
             var run = Current;
             interpolator.Interpolate = run.interpolate;
             var s = JsonUtility.FromJson<ScooterBuildSettings>(JsonUtility.ToJson(scooter));
-            s.wheelModel = run.wheelModel;
             s.stabilizers = false;
             s.steerTarget = run.test == Test.Turn ? turnSteerDegrees : 0f;
-            s.steerSpring = 2000f; // руль держит угол жёстко: проверяем колёса, а не колонку
-            s.steerDamper = 50f;
+            s.steerStiffness = 2000f; // руль держит угол жёстко: проверяем колёса, а не колонку
+            s.steerDamping = 50f;
 
             var pose = new Pose(new Vector3(0f, 0.002f, 0f), Quaternion.identity);
-            rig = SpikeRig.Build($"S3 {run.name}", pose, loop, interpolator, s, wheels, null, null, scooterMaterial, null);
+            rig = SpikeRig.Build($"S3 {run.name}", pose, loop, interpolator, s, null, null, scooterMaterial, null);
             var deck = rig.Scooter.Deck;
             deck.mass = loadMass;
+            deck.automaticCenterOfMass = false;
             deck.centerOfMass = loadCenterOfMass;
+            deck.automaticInertiaTensor = false;
             deck.inertiaTensor = loadInertia;
             deck.inertiaTensorRotation = Quaternion.identity;
             if (followCamera != null) followCamera.Target = rig.Focus;
@@ -220,12 +223,11 @@ namespace ScootFoma.Spikes
             if (pendingInitialMotion && settleTime >= SettleDuration)
             {
                 pendingInitialMotion = false;
-                m.StartPos = deck.position;
+                m.StartPos = deck.transform.position;
                 float v = Current.test == Test.Turn ? turnSpeed : straightSpeed;
                 rig.SetRigidMotion(new Vector3(0f, 0f, v), Vector3.zero);
                 float spin = v / scooter.wheelRadius;
-                if (rig.Scooter.FrontWheel != null) rig.Scooter.FrontWheel.angularVelocity = rig.Scooter.FrontWheel.transform.right * spin;
-                if (rig.Scooter.RearWheel != null) rig.Scooter.RearWheel.angularVelocity = rig.Scooter.RearWheel.transform.right * spin;
+                rig.Scooter.SetWheelSpin(spin);
                 m.StartSpeed = v;
             }
 
@@ -241,11 +243,18 @@ namespace ScootFoma.Spikes
         {
             if (rig == null || finished || pendingInitialMotion) return;
             runTime += dt;
+            m.Ticks++;
             var deck = rig.Scooter.Deck;
             Vector3 v = deck.linearVelocity;
 
-            m.MaxAbsX = Mathf.Max(m.MaxAbsX, Mathf.Abs(deck.position.x - m.StartPos.x));
-            bool beforeBump = deck.position.z < bumpZ - 1f;
+            // Отпечатки по номеру тика, а не по времени: так сравнение не зависит от накопления float.
+            int beforeBumpTick = Mathf.RoundToInt(1f / dt);
+            int endTick = Mathf.RoundToInt(duration / dt);
+            if (m.Ticks == beforeBumpTick) m.FingerprintBeforeBump = Fingerprint(deck);
+            if (m.Ticks == endTick) m.FingerprintEnd = Fingerprint(deck);
+
+            m.MaxAbsX = Mathf.Max(m.MaxAbsX, Mathf.Abs(deck.transform.position.x - m.StartPos.x));
+            bool beforeBump = deck.transform.position.z < bumpZ - 1f;
             if (Current.test == Test.Straight)
             {
                 if (beforeBump && runTime > 0.2f)
@@ -258,6 +267,7 @@ namespace ScootFoma.Spikes
             else if (runTime > 1f)
             {
                 m.YawRateSum += Mathf.Abs(deck.angularVelocity.y);
+                m.SteerSum += rig.Scooter.SteerAngle;
                 m.SpeedSum += Vector3.ProjectOnPlane(v, Vector3.up).magnitude;
                 Vector3 rearPoint = deck.transform.TransformPoint(new Vector3(0f, -0.03f, scooter.wheelbaseRear));
                 float lateral = Vector3.Dot(deck.GetPointVelocity(rearPoint), deck.transform.right);
@@ -265,11 +275,20 @@ namespace ScootFoma.Spikes
                 m.TurnSamples++;
             }
 
-            if (runTime >= duration)
+            if (m.Ticks >= endTick)
             {
                 Report();
                 NextRun();
             }
+        }
+
+        /// Положение и скорость деки побитово (формат R) — для проверки детерминизма.
+        static string Fingerprint(ArticulationBody deck)
+        {
+            Vector3 p = deck.transform.position, v = deck.linearVelocity;
+            Quaternion q = deck.transform.rotation;
+            return string.Join(",", new[] { p.x, p.y, p.z, v.x, v.y, v.z, q.x, q.y, q.z, q.w }
+                .Select(f => f.ToString("R", System.Globalization.CultureInfo.InvariantCulture)));
         }
 
         /// S2: скорость визуала от кадра к кадру. При ровной езде без интерполяции она скачет.
@@ -278,7 +297,7 @@ namespace ScootFoma.Spikes
             if (rig == null || finished || pendingInitialMotion || rig.Focus == null || Current.test != Test.Straight) return;
             Vector3 p = rig.Focus.position;
             float dt = Time.unscaledDeltaTime;
-            if (m.HasLastVisual && dt > 0f && runTime > 0.3f && rig.Scooter.Deck.position.z < bumpZ - 1f)
+            if (m.HasLastVisual && dt > 0f && runTime > 0.3f && rig.Scooter.Deck.transform.position.z < bumpZ - 1f)
             {
                 float s = (p - m.LastVisualPos).magnitude / dt;
                 m.FrameSpeedSum += s;
@@ -296,7 +315,7 @@ namespace ScootFoma.Spikes
             string line;
             if (run.test == Test.Straight)
             {
-                float distance = deck.position.z - m.StartPos.z;
+                float distance = deck.transform.position.z - m.StartPos.z;
                 float speedKeep = deck.linearVelocity.z / m.StartSpeed;
                 float vertRms = m.VertSamples > 0 ? Mathf.Sqrt(m.VertSqSum / m.VertSamples) : 0f;
                 float mean = m.FrameSamples > 0 ? m.FrameSpeedSum / m.FrameSamples : 0f;
@@ -314,12 +333,32 @@ namespace ScootFoma.Spikes
                 float wheelbase = scooter.columnZ - scooter.wheelbaseRear;
                 float expected = wheelbase / Mathf.Tan(turnSteerDegrees * Mathf.Deg2Rad);
                 float lateralRms = m.TurnSamples > 0 ? Mathf.Sqrt(m.LateralSqSum / m.TurnSamples) : 0f;
+                float steer = m.TurnSamples > 0 ? m.SteerSum / m.TurnSamples : 0f;
+                float expectedFromActualSteer = wheelbase / Mathf.Tan(Mathf.Abs(steer) * Mathf.Deg2Rad);
                 line = string.Format(
-                    "[S3] {0,-26} радиус={1,5:F2}м ожидаемый={2,5:F2}м (ошибка {3,5:P0}) | боковой снос заднего колеса rms={4,5:F3}м/с",
-                    run.name, radius, expected, (radius - expected) / expected, lateralRms);
+                    "[S3] {0,-26} радиус={1,5:F2}м ожидаемый={2,5:F2}м (ошибка {3,5:P0}) | руль факт={4,5:F2}° → радиус по факту={5,5:F2}м | боковой снос заднего колеса rms={6,5:F3}м/с",
+                    run.name, radius, expected, (radius - expected) / expected, steer, expectedFromActualSteer, lateralRms);
             }
+            fingerprints.Add((run.name, m.FingerprintBeforeBump, m.FingerprintEnd));
             results.Add(line);
             Debug.Log(line);
+        }
+
+        readonly List<(string name, string beforeBump, string end)> fingerprints = new List<(string, string, string)>();
+
+        /// B: прогоны с одинаковым именем до « #» должны дать побитово одинаковые отпечатки.
+        void ReportDeterminism(StringBuilder sb)
+        {
+            foreach (var group in fingerprints.GroupBy(f => f.name.Split(new[] { " #" }, StringSplitOptions.None)[0]).Where(g => g.Count() > 1))
+            {
+                var first = group.First();
+                bool sameBefore = group.All(f => f.beforeBump == first.beforeBump);
+                bool sameEnd = group.All(f => f.end == first.end);
+                string line = $"[S3] детерминизм «{group.Key}» ×{group.Count()}: до бугра {(sameBefore ? "СОВПАДАЕТ" : "РАЗНЫЙ")}, конец {(sameEnd ? "СОВПАДАЕТ" : "РАЗНЫЙ")}";
+                sb.AppendLine(line);
+                if (!sameBefore || !sameEnd)
+                    foreach (var f in group) sb.AppendLine($"    {f.name}: до={f.beforeBump} конец={f.end}");
+            }
         }
 
         void Finish()
@@ -328,7 +367,7 @@ namespace ScootFoma.Spikes
             interpolator.Interpolate = true;
             var sb = new StringBuilder($"[S3] ИТОГ (частота кадров ~{1f / Mathf.Max(Time.smoothDeltaTime, 1e-4f):F0} fps, физика {loop.PhysicsHz:F0} Гц)\n");
             foreach (var r in results) sb.AppendLine(r);
-            Debug.Log(sb.ToString());
+            ReportDeterminism(sb);            Debug.Log(sb.ToString());
         }
 
         void OnGUI()

@@ -1,25 +1,14 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ScootFoma.Rig
 {
-    public enum WheelModel
-    {
-        /// Колесо — отдельный Rigidbody на шарнире, трение PhysX.
-        PhysicalBody,
-        /// Колесо — коллайдер без трения на деке/руле, анизотропное трение считает WheelFrictionDriver.
-        CustomFriction,
-        /// Колесо — коллайдер с трением на деке/руле; качение через contact modification (RollingContactWheels).
-        RollingContact,
-    }
-
     [Serializable]
     public class ScooterBuildSettings
     {
-        public WheelModel wheelModel = WheelModel.PhysicalBody;
-        public float deckMass = 2.6f;
-        public float barMass = 1.6f;
-        [Tooltip("Только для PhysicalBody: масса каждого колеса. В CustomFriction колесо входит в массу деки/руля.")]
+        public float deckMass = 2.3f;
+        public float barMass = 1.3f;
         public float wheelMass = 0.3f;
         public float wheelRadius = 0.055f;
         public float wheelbaseRear = -0.28f;
@@ -28,10 +17,17 @@ namespace ScootFoma.Rig
         public float gripHalfWidth = 0.25f;
         [Tooltip("Боковые опоры у деки, чтобы самокат без баланса не падал (только для тестов).")]
         public bool stabilizers;
-        public float steerSpring = 20f;
-        public float steerDamper = 2f;
-        [Tooltip("Угол руля, который держит пружина колонки, градусы.")]
+
+        [Header("Колонка (привод руля)")]
+        [Tooltip("Жёсткость привода колонки. 0 — руль свободен (барспин).")]
+        public float steerStiffness = 20f;
+        public float steerDamping = 2f;
+        [Tooltip("Угол руля, который держит привод колонки, градусы.")]
         public float steerTarget;
+
+        [Header("Колёса")]
+        [Tooltip("Вязкое сопротивление вращению колеса (демпфирование сустава). Заменяет сопротивление качению.")]
+        public float wheelRollingDamping;
         public float wheelFriction = 1.0f;
         public float deckFriction = 1.2f;
     }
@@ -39,24 +35,36 @@ namespace ScootFoma.Rig
     public sealed class ScooterParts
     {
         public Transform Root;
-        public Rigidbody Deck;
-        public Rigidbody Bar;
-        public HingeJoint Column;
-        public SphereCollider FrontWheelCollider;
-        public SphereCollider RearWheelCollider;
-        public Rigidbody FrontWheel; // null в CustomFriction
-        public Rigidbody RearWheel;  // null в CustomFriction
-        public Vector3 GripLocalL;   // в локальных координатах руля
+        public ArticulationBody Deck;  // корень articulation
+        public ArticulationBody Bar;   // руль с вилкой, revolute вокруг колонки
+        public ArticulationBody FrontWheel;
+        public ArticulationBody RearWheel;
+        public Vector3 GripLocalL;     // в локальных координатах руля
         public Vector3 GripLocalR;
-        public float DeckTopY;       // высота верха деки над землёй в позе сборки
+        public float DeckTopY;         // высота верха деки над землёй в позе сборки
 
-        public Rigidbody[] Bodies => FrontWheel != null
-            ? new[] { Deck, Bar, FrontWheel, RearWheel }
-            : new[] { Deck, Bar };
+        public ArticulationBody[] Bodies => new[] { Deck, Bar, FrontWheel, RearWheel };
+
+        /// Угол руля относительно деки, градусы.
+        public float SteerAngle => Bar.jointPosition.dofCount > 0 ? Bar.jointPosition[0] * Mathf.Rad2Deg : 0f;
+
+        /// Задаёт колёсам угловую скорость качения (рад/с), сохраняя остальные скорости суставов.
+        public void SetWheelSpin(float omega)
+        {
+            var velocities = new List<float>();
+            var starts = new List<int>();
+            Deck.GetJointVelocities(velocities);
+            Deck.GetDofStartIndices(starts);
+            velocities[starts[FrontWheel.index]] = omega;
+            velocities[starts[RearWheel.index]] = omega;
+            Deck.SetJointVelocities(velocities);
+        }
     }
 
-    /// Самокат из Rigidbody: Joint требует Rigidbody (на ArticulationBody его не повесить),
-    /// а хвату руки нужен Joint. Поэтому самокат — Rigidbody, райдер — ArticulationBody.
+    /// Самокат — отдельная articulation: дека (корень) → руль (revolute, бесконечный) → переднее колесо;
+    /// дека → заднее колесо. Колёса — настоящие вращающиеся звенья: трение PhysX у катящегося тела честное,
+    /// а приведённые координаты не дают шарнирам колёс разойтись под весом райдера (спайк S3).
+    /// Хват руки — Joint на кисти-Rigidbody (см. RiderScooterCoupling): на ArticulationBody Joint не вешается.
     public static class ScooterRigBuilder
     {
         const float DeckThickness = 0.03f;
@@ -70,12 +78,10 @@ namespace ScootFoma.Rig
             parts.DeckTopY = deckCenterY + DeckThickness * 0.5f;
 
             var deckMat = Material("Deck", s.deckFriction);
-            var wheelMat = s.wheelModel == WheelModel.CustomFriction
-                ? Frictionless("WheelFrictionless")
-                : Material("Wheel", s.wheelFriction);
+            var wheelMat = Material("Wheel", s.wheelFriction);
 
-            // Дека
-            var deckGo = Node("Deck", container, layer, pose, new Vector3(0f, deckCenterY, 0f));
+            // Дека — корень
+            var deckGo = Node("Deck", container, layer, pose.position + pose.rotation * new Vector3(0f, deckCenterY, 0f), pose.rotation);
             // Дека между колёсами с зазором 5 мм, шея поднята над передним колесом к рулевому стакану.
             float deckRear = s.wheelbaseRear + r + 0.005f;
             float deckFront = s.columnZ - r - 0.005f;
@@ -93,104 +99,95 @@ namespace ScootFoma.Rig
                 AddBox(deckGo, "StabilizerL", new Vector3(-0.35f, y, -0.02f), new Vector3(0.05f, 0.02f, 0.12f), deckMat);
                 AddBox(deckGo, "StabilizerR", new Vector3(0.35f, y, -0.02f), new Vector3(0.05f, 0.02f, 0.12f), deckMat);
             }
-            parts.Deck = Body(deckGo, s.deckMass);
+            parts.Deck = Link(deckGo, s.deckMass);
 
-            // Руль с вилкой: тело в точке колонки на уровне верха деки
+            // Руль с вилкой: звено в точке колонки на уровне верха деки, revolute вокруг вертикали рига
             float barBaseY = parts.DeckTopY;
-            var barGo = Node("Bar", container, layer, pose, new Vector3(0f, barBaseY, s.columnZ));
+            var barGo = Node("Bar", deckGo.transform, layer, pose.position + pose.rotation * new Vector3(0f, barBaseY, s.columnZ), pose.rotation);
             float wheelLocalY = r - barBaseY;
             float topLocalY = s.barHeight - barBaseY;
             AddCapsule(barGo, "Column", new Vector3(0f, (wheelLocalY + topLocalY) * 0.5f, 0f), 0.016f, topLocalY - wheelLocalY, 1, deckMat);
             AddCapsule(barGo, "Handlebar", new Vector3(0f, topLocalY, 0f), 0.012f, s.gripHalfWidth * 2f + 0.08f, 0, deckMat);
             parts.GripLocalL = new Vector3(-s.gripHalfWidth, topLocalY, 0f);
             parts.GripLocalR = new Vector3(s.gripHalfWidth, topLocalY, 0f);
-            parts.Bar = Body(barGo, s.barMass);
-
-            var column = barGo.AddComponent<HingeJoint>();
-            column.connectedBody = parts.Deck;
-            column.anchor = Vector3.zero;
-            column.axis = Vector3.up;
-            column.useLimits = false; // барспин и тейлвип: колонка крутится бесконечно
-            column.useSpring = s.steerSpring > 0f;
-            column.spring = new JointSpring { spring = s.steerSpring, damper = s.steerDamper, targetPosition = s.steerTarget };
-            column.enableCollision = false;
-            parts.Column = column;
-
-            // Колёса
-            Vector3 frontWheelPos = new Vector3(0f, r, s.columnZ);
-            Vector3 rearWheelPos = new Vector3(0f, r, s.wheelbaseRear);
-            if (s.wheelModel != WheelModel.PhysicalBody)
+            parts.Bar = Link(barGo, s.barMass);
+            // Ось X якоря = вертикаль колонки. Без лимитов: барспин и тейлвип крутят колонку бесконечно.
+            Revolute(parts.Bar, Quaternion.Euler(0f, 0f, 90f), new ArticulationDrive
             {
-                parts.FrontWheelCollider = AddWheelCollider(barGo, "FrontWheel", barGo.transform.InverseTransformPoint(pose.position + pose.rotation * frontWheelPos), r, wheelMat);
-                parts.RearWheelCollider = AddWheelCollider(deckGo, "RearWheel", deckGo.transform.InverseTransformPoint(pose.position + pose.rotation * rearWheelPos), r, wheelMat);
-            }
-            else
-            {
-                parts.FrontWheel = WheelBody("FrontWheel", container, layer, pose, frontWheelPos, s, wheelMat, parts.Bar, out parts.FrontWheelCollider);
-                parts.RearWheel = WheelBody("RearWheel", container, layer, pose, rearWheelPos, s, wheelMat, parts.Deck, out parts.RearWheelCollider);
-            }
+                driveType = ArticulationDriveType.Force,
+                stiffness = s.steerStiffness,
+                damping = s.steerDamping,
+                forceLimit = float.MaxValue,
+                target = s.steerTarget,
+            });
 
-            IgnoreSelfCollisions(container);
+            // Колёса: ось X якоря = ось колеса (X рига)
+            parts.FrontWheel = Wheel("FrontWheel", barGo.transform, layer, pose.position + pose.rotation * new Vector3(0f, r, s.columnZ), pose.rotation, s, wheelMat);
+            parts.RearWheel = Wheel("RearWheel", deckGo.transform, layer, pose.position + pose.rotation * new Vector3(0f, r, s.wheelbaseRear), pose.rotation, s, wheelMat);
+
+            IgnoreSelfCollisions(deckGo.transform);
             return parts;
         }
 
-        /// Детали самоката связаны шарнирами и не должны сталкиваться между собой. Иначе вращающееся
-        /// колесо цепляет деку в пределах contact offset и идёт вразнос.
-        static void IgnoreSelfCollisions(Transform container)
+        static ArticulationBody Wheel(string name, Transform parent, int layer, Vector3 position, Quaternion rotation,
+            ScooterBuildSettings s, PhysicsMaterial mat)
         {
-            var colliders = container.GetComponentsInChildren<Collider>();
+            var go = Node(name, parent, layer, position, rotation);
+            var c = go.AddComponent<SphereCollider>();
+            c.radius = s.wheelRadius;
+            c.sharedMaterial = mat;
+            var ab = Link(go, s.wheelMass);
+            ab.maxAngularVelocity = 400f;
+            ab.maxJointVelocity = 400f;
+            Revolute(ab, Quaternion.identity, new ArticulationDrive
+            {
+                driveType = ArticulationDriveType.Force,
+                stiffness = 0f,
+                damping = s.wheelRollingDamping,
+                forceLimit = float.MaxValue,
+            });
+            return ab;
+        }
+
+        /// Детали самоката не должны сталкиваться между собой: вращающееся колесо цепляет деку
+        /// в пределах contact offset и идёт вразнос.
+        static void IgnoreSelfCollisions(Transform root)
+        {
+            var colliders = root.GetComponentsInChildren<Collider>();
             for (int i = 0; i < colliders.Length; i++)
             for (int j = i + 1; j < colliders.Length; j++)
-                if (colliders[i].attachedRigidbody != colliders[j].attachedRigidbody)
+                if (colliders[i].attachedArticulationBody != colliders[j].attachedArticulationBody)
                     Physics.IgnoreCollision(colliders[i], colliders[j], true);
         }
 
-        static Rigidbody WheelBody(string name, Transform container, int layer, Pose pose, Vector3 localPos,
-            ScooterBuildSettings s, PhysicsMaterial mat, Rigidbody attachTo, out SphereCollider collider)
-        {
-            var go = Node(name, container, layer, pose, localPos);
-            collider = go.AddComponent<SphereCollider>();
-            collider.radius = s.wheelRadius;
-            collider.sharedMaterial = mat;
-            var rb = Body(go, s.wheelMass);
-            rb.maxAngularVelocity = 400f;
-            var hinge = go.AddComponent<HingeJoint>();
-            hinge.connectedBody = attachTo;
-            hinge.anchor = Vector3.zero;
-            hinge.axis = Vector3.right;
-            hinge.enableCollision = false;
-            return rb;
-        }
-
-        static SphereCollider AddWheelCollider(GameObject owner, string name, Vector3 localPos, float radius, PhysicsMaterial mat)
-        {
-            var go = new GameObject(name) { layer = owner.layer };
-            go.transform.SetParent(owner.transform, false);
-            go.transform.localPosition = localPos;
-            var c = go.AddComponent<SphereCollider>();
-            c.radius = radius;
-            c.sharedMaterial = mat;
-            return c;
-        }
-
-        static GameObject Node(string name, Transform container, int layer, Pose pose, Vector3 localPos)
+        static GameObject Node(string name, Transform parent, int layer, Vector3 position, Quaternion rotation)
         {
             var go = new GameObject(name) { layer = layer };
-            go.transform.SetParent(container, false);
-            go.transform.SetPositionAndRotation(pose.position + pose.rotation * localPos, pose.rotation);
+            go.transform.SetParent(parent, false);
+            go.transform.SetPositionAndRotation(position, rotation);
             return go;
         }
 
-        static Rigidbody Body(GameObject go, float mass)
+        static ArticulationBody Link(GameObject go, float mass)
         {
-            var rb = go.AddComponent<Rigidbody>();
-            rb.mass = mass;
-            rb.linearDamping = 0f;
-            rb.angularDamping = 0.01f;
-            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-            rb.interpolation = RigidbodyInterpolation.None; // визуал интерполирует PoseInterpolator
-            rb.maxAngularVelocity = 100f;
-            return rb;
+            var ab = go.AddComponent<ArticulationBody>();
+            ab.mass = mass;
+            ab.linearDamping = 0f;
+            ab.angularDamping = 0f;
+            ab.jointFriction = 0f;
+            ab.sleepThreshold = 0f;
+            ab.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            return ab;
+        }
+
+        static void Revolute(ArticulationBody ab, Quaternion anchorRotation, ArticulationDrive drive)
+        {
+            ab.jointType = ArticulationJointType.RevoluteJoint;
+            ab.twistLock = ArticulationDofLock.FreeMotion;
+            ab.matchAnchors = true;
+            ab.anchorPosition = Vector3.zero;
+            ab.anchorRotation = anchorRotation;
+            ab.xDrive = drive;
         }
 
         static void AddBox(GameObject owner, string name, Vector3 center, Vector3 size, PhysicsMaterial mat)
@@ -221,15 +218,6 @@ namespace ScootFoma.Rig
             dynamicFriction = friction,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Average,
-            bounceCombine = PhysicsMaterialCombine.Minimum,
-        };
-
-        static PhysicsMaterial Frictionless(string name) => new PhysicsMaterial(name)
-        {
-            staticFriction = 0f,
-            dynamicFriction = 0f,
-            bounciness = 0f,
-            frictionCombine = PhysicsMaterialCombine.Minimum,
             bounceCombine = PhysicsMaterialCombine.Minimum,
         };
     }

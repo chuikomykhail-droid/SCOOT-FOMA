@@ -2,7 +2,6 @@ using NUnit.Framework;
 using ScootFoma.Control;
 using ScootFoma.Grip;
 using ScootFoma.Sensing;
-using ScootFoma.Wheel;
 using UnityEngine;
 
 namespace ScootFoma.Tests
@@ -48,43 +47,6 @@ namespace ScootFoma.Tests
         public void ZeroMax_GivesNoForce()
         {
             Assert.AreEqual(Vector3.zero, CappedSpring.Force(Vector3.up, Vector3.up, 1000f, 10f, 0f));
-        }
-    }
-
-    public class WheelFrictionTests
-    {
-        static WheelContactInput Input(Vector3 velocity, float normalForce = 400f) => new WheelContactInput
-        {
-            Normal = Vector3.up,
-            Axle = Vector3.right,
-            ContactVelocity = velocity,
-            NormalForce = normalForce,
-            Dt = 1f / 120f,
-        };
-
-        [Test]
-        public void Rolling_HasOnlySmallResistance()
-        {
-            var tuning = new WheelFrictionTuning();
-            Vector3 f = WheelFriction.Force(Input(new Vector3(0f, 0f, 5f)), tuning);
-            Assert.AreEqual(0f, f.x, 1e-4f);
-            Assert.AreEqual(-tuning.rollingResistance * 400f, f.z, 1e-3f);
-        }
-
-        [Test]
-        public void LateralSlip_IsOpposed_AndCappedByGrip()
-        {
-            var tuning = new WheelFrictionTuning();
-            Vector3 small = WheelFriction.Force(Input(new Vector3(0.01f, 0f, 0f)), tuning);
-            Assert.Less(small.x, 0f);
-            Vector3 big = WheelFriction.Force(Input(new Vector3(10f, 0f, 0f)), tuning);
-            Assert.AreEqual(-tuning.lateralGrip * 400f, big.x, 1e-3f);
-        }
-
-        [Test]
-        public void NoLoad_NoForce()
-        {
-            Assert.AreEqual(Vector3.zero, WheelFriction.Force(Input(new Vector3(1f, 0f, 1f), 0f), new WheelFrictionTuning()));
         }
     }
 

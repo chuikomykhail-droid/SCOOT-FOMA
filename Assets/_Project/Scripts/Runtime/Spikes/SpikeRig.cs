@@ -3,12 +3,12 @@ using ScootFoma.Presentation;
 using ScootFoma.Rig;
 using ScootFoma.Sensing;
 using ScootFoma.Simulation;
-using ScootFoma.Wheel;
 using UnityEngine;
 
 namespace ScootFoma.Spikes
 {
     /// Сборка самоката (и, опционально, райдера) для спайков: физика, связи, визуал, сбор метрик.
+    /// Самокат и райдер — две articulation; кисти — Rigidbody-посредники хвата.
     public sealed class SpikeRig
     {
         public Transform Root;
@@ -16,15 +16,14 @@ namespace ScootFoma.Spikes
         public ScooterParts Scooter;
         public RiderParts Rider;
         public RiderScooterCoupling Coupling;
-        public WheelFrictionDriver DeckWheels, BarWheels;
         public Transform Focus; // визуал деки — цель камеры
 
         BodyMassState[] massStates;
+        readonly List<float> jointBuffer = new List<float>(64);
 
         public static SpikeRig Build(string name, Pose pose, SimulationLoop loop, PoseInterpolator interpolator,
-            ScooterBuildSettings scooter, WheelFrictionTuning wheelTuning,
-            RiderBuildSettings rider, CouplingSettings coupling, Material scooterMat, Material riderMat,
-            bool gyroscopic = true)
+            ScooterBuildSettings scooter, RiderBuildSettings rider, CouplingSettings coupling,
+            Material scooterMat, Material riderMat)
         {
             var rig = new SpikeRig();
             rig.Root = new GameObject(name).transform;
@@ -35,22 +34,6 @@ namespace ScootFoma.Spikes
             Physics.IgnoreLayerCollision(riderLayer, riderLayer, true);
 
             rig.Scooter = ScooterRigBuilder.Build(rig.Root, pose, scooter, scooterLayer);
-            if (gyroscopic)
-                rig.Root.gameObject.AddComponent<GyroscopicRigidbodies>().Init(loop, rig.Scooter.Bodies);
-
-            if (scooter.wheelModel == WheelModel.CustomFriction)
-            {
-                rig.DeckWheels = rig.Scooter.Deck.gameObject.AddComponent<WheelFrictionDriver>();
-                rig.DeckWheels.Init(loop, wheelTuning, rig.Scooter.RearWheelCollider);
-                rig.BarWheels = rig.Scooter.Bar.gameObject.AddComponent<WheelFrictionDriver>();
-                rig.BarWheels.Init(loop, wheelTuning, rig.Scooter.FrontWheelCollider);
-            }
-            else if (scooter.wheelModel == WheelModel.RollingContact)
-            {
-                rig.Root.gameObject.AddComponent<RollingContactWheels>().Init(loop,
-                    (rig.Scooter.FrontWheelCollider, rig.Scooter.Bar),
-                    (rig.Scooter.RearWheelCollider, rig.Scooter.Deck));
-            }
 
             if (rider != null)
             {
@@ -73,16 +56,17 @@ namespace ScootFoma.Spikes
                     VisualFactory.MirrorBody(ab, rig.VisualRoot, interpolator, riderMat);
             }
 
-            foreach (var rb in rig.Scooter.Bodies)
+            foreach (var ab in rig.Scooter.Bodies)
             {
-                var v = VisualFactory.MirrorBody(rb, rig.VisualRoot, interpolator, scooterMat);
-                if (rb == rig.Scooter.Deck) rig.Focus = v;
+                var v = VisualFactory.MirrorBody(ab, rig.VisualRoot, interpolator, scooterMat);
+                if (ab == rig.Scooter.Deck) rig.Focus = v;
             }
 
-            int count = rig.Scooter.Bodies.Length + (rig.Rider != null ? rig.Rider.All.Length : 0);
-            rig.massStates = new BodyMassState[count];
+            rig.massStates = new BodyMassState[rig.CountBodies()];
             return rig;
         }
+
+        int CountBodies() => Scooter.Bodies.Length + (Rider != null ? Rider.All.Length + 2 : 0);
 
         /// Удаляет риг сразу из физики (SetActive) и затем уничтожает объекты.
         public void Destroy()
@@ -91,31 +75,34 @@ namespace ScootFoma.Spikes
             if (VisualRoot != null) Object.Destroy(VisualRoot.gameObject);
         }
 
-        public IEnumerable<Component> AllBodies()
+        IEnumerable<Rigidbody> Hands()
         {
-            foreach (var rb in Scooter.Bodies) yield return rb;
-            if (Rider != null) foreach (var ab in Rider.All) yield return ab;
+            if (Coupling == null) yield break;
+            yield return Coupling.HandL.Body;
+            yield return Coupling.HandR.Body;
         }
 
-        /// Задаёт всей системе движение твёрдого тела: v0 + ω × (r − центр масс).
+        /// Задаёт всей системе движение твёрдого тела: v0 + ω × (r − центр масс). Скорости суставов обнуляются.
         public void SetRigidMotion(Vector3 linear, Vector3 angular)
         {
             Vector3 com = CenterOfMass();
-            foreach (var rb in Scooter.Bodies)
+            SetRootMotion(Scooter.Deck, linear, angular, com, zeroJoints: true);
+            if (Rider != null) SetRootMotion(Rider.Pelvis, linear, angular, com, zeroJoints: true);
+            foreach (var hand in Hands())
             {
-                rb.linearVelocity = linear + Vector3.Cross(angular, rb.worldCenterOfMass - com);
-                rb.angularVelocity = angular;
+                hand.linearVelocity = linear + Vector3.Cross(angular, hand.worldCenterOfMass - com);
+                hand.angularVelocity = angular;
             }
-            if (Rider != null)
-            {
-                var root = Rider.Pelvis;
-                root.linearVelocity = linear + Vector3.Cross(angular, root.worldCenterOfMass - com);
-                root.angularVelocity = angular;
-                var zeros = new List<float>();
-                int dofs = root.GetJointVelocities(zeros);
-                for (int i = 0; i < dofs; i++) zeros[i] = 0f;
-                root.SetJointVelocities(zeros);
-            }
+        }
+
+        void SetRootMotion(ArticulationBody root, Vector3 linear, Vector3 angular, Vector3 com, bool zeroJoints)
+        {
+            root.linearVelocity = linear + Vector3.Cross(angular, root.worldCenterOfMass - com);
+            root.angularVelocity = angular;
+            if (!zeroJoints) return;
+            int dofs = root.GetJointVelocities(jointBuffer);
+            for (int i = 0; i < dofs; i++) jointBuffer[i] = 0f;
+            root.SetJointVelocities(jointBuffer);
         }
 
         public Vector3 CenterOfMass()
@@ -131,7 +118,7 @@ namespace ScootFoma.Spikes
             return MomentumMath.TotalAngularMomentum(massStates, massStates.Length, com);
         }
 
-        /// Момент импульса самоката и райдера по отдельности относительно общего центра масс.
+        /// Момент импульса самоката и райдера (с кистями) по отдельности относительно общего центра масс.
         public (Vector3 scooter, Vector3 rider) AngularMomentumSplit()
         {
             Fill();
@@ -146,6 +133,29 @@ namespace ScootFoma.Spikes
             return (scooter, rider);
         }
 
+        /// Страж момента импульса: добавляет всей системе вращение как твёрдого тела, возвращая L к target.
+        /// У articulation меняется только корень — звенья получают ту же добавку при неизменных скоростях суставов.
+        public Vector3 GuardAngularMomentum(Vector3 target, float maxFraction)
+        {
+            Fill();
+            Vector3 dOmega = AngularMomentumGuard.Correction(massStates, massStates.Length, target, maxFraction, out Vector3 com);
+            if (dOmega.sqrMagnitude < 1e-12f) return dOmega;
+            AddRootRotation(Scooter.Deck, dOmega, com);
+            if (Rider != null) AddRootRotation(Rider.Pelvis, dOmega, com);
+            foreach (var hand in Hands())
+            {
+                hand.angularVelocity += dOmega;
+                hand.linearVelocity += Vector3.Cross(dOmega, hand.worldCenterOfMass - com);
+            }
+            return dOmega;
+        }
+
+        static void AddRootRotation(ArticulationBody root, Vector3 dOmega, Vector3 com)
+        {
+            root.angularVelocity += dOmega;
+            root.linearVelocity += Vector3.Cross(dOmega, root.worldCenterOfMass - com);
+        }
+
         public float MaxBodySpeed()
         {
             Fill();
@@ -157,31 +167,31 @@ namespace ScootFoma.Spikes
         void Fill()
         {
             int i = 0;
-            foreach (var rb in Scooter.Bodies)
-            {
-                massStates[i++] = new BodyMassState
-                {
-                    Mass = rb.mass,
-                    CenterOfMass = rb.worldCenterOfMass,
-                    Velocity = rb.GetPointVelocity(rb.worldCenterOfMass),
-                    AngularVelocity = rb.angularVelocity,
-                    InertiaDiagonal = rb.inertiaTensor,
-                    InertiaRotation = rb.rotation * rb.inertiaTensorRotation,
-                };
-            }
+            foreach (var ab in Scooter.Bodies) massStates[i++] = State(ab);
             if (Rider == null) return;
-            foreach (var ab in Rider.All)
+            foreach (var hand in Hands())
             {
                 massStates[i++] = new BodyMassState
                 {
-                    Mass = ab.mass,
-                    CenterOfMass = ab.worldCenterOfMass,
-                    Velocity = ab.GetPointVelocity(ab.worldCenterOfMass),
-                    AngularVelocity = ab.angularVelocity,
-                    InertiaDiagonal = ab.inertiaTensor,
-                    InertiaRotation = ab.transform.rotation * ab.inertiaTensorRotation,
+                    Mass = hand.mass,
+                    CenterOfMass = hand.worldCenterOfMass,
+                    Velocity = hand.GetPointVelocity(hand.worldCenterOfMass),
+                    AngularVelocity = hand.angularVelocity,
+                    InertiaDiagonal = hand.inertiaTensor,
+                    InertiaRotation = hand.rotation * hand.inertiaTensorRotation,
                 };
             }
+            foreach (var ab in Rider.All) massStates[i++] = State(ab);
         }
+
+        static BodyMassState State(ArticulationBody ab) => new BodyMassState
+        {
+            Mass = ab.mass,
+            CenterOfMass = ab.worldCenterOfMass,
+            Velocity = ab.GetPointVelocity(ab.worldCenterOfMass),
+            AngularVelocity = ab.angularVelocity,
+            InertiaDiagonal = ab.inertiaTensor,
+            InertiaRotation = ab.transform.rotation * ab.inertiaTensorRotation,
+        };
     }
 }

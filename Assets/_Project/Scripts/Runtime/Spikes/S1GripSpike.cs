@@ -4,7 +4,6 @@ using System.Text;
 using ScootFoma.Presentation;
 using ScootFoma.Rig;
 using ScootFoma.Simulation;
-using ScootFoma.Wheel;
 using UnityEngine;
 
 namespace ScootFoma.Spikes
@@ -26,8 +25,10 @@ namespace ScootFoma.Spikes
             [Tooltip("<0 — взять из coupling.")]
             public float footMaxForce = -1f;
             public bool grips = true;
-            [Tooltip("Гироскопический момент для Rigidbody самоката.")]
-            public bool gyroscopic = true;
+            [Tooltip("Лимит сферических суставов, градусы. <0 — из rider, 0 — без лимитов.")]
+            public float sphericalLimit = -1f;
+            [Tooltip("Страж момента импульса в сценариях полёта (Spin, Flip).")]
+            public bool momentumGuard;
         }
 
         [SerializeField] SimulationLoop loop;
@@ -38,26 +39,29 @@ namespace ScootFoma.Spikes
         [Tooltip("Ускорение прогона матрицы. После окончания скорость возвращается к 1.")]
         [SerializeField] float runSpeed = 4f;
         [Tooltip("Писать разложение момента импульса в сценариях вращения.")]
-        [SerializeField] bool logMomentum = true;
+        [SerializeField] bool logMomentum;
 
+        // C: помогают ли лимиты сферических суставов и 240 Гц от утечки момента импульса, и справляется ли страж.
         [SerializeField] List<Config> configs = new List<Config>
         {
-            new Config { name = "120Hz" },
-            new Config { name = "240Hz", hz = 240f },
-            new Config { name = "120Hz massScale4", gripMassScale = 4f },
-            new Config { name = "120Hz scooter x2", scooterMassMultiplier = 2f },
-            new Config { name = "120Hz noGravComp", gravityCompensation = false },
+            new Config { name = "120 free", sphericalLimit = 0f },
+            new Config { name = "120 lim60", sphericalLimit = 60f },
+            new Config { name = "240 free", hz = 240f, sphericalLimit = 0f },
+            new Config { name = "240 lim60", hz = 240f, sphericalLimit = 60f },
+            new Config { name = "120 lim60 guard", sphericalLimit = 60f, momentumGuard = true },
+            new Config { name = "240 lim60 guard", hz = 240f, sphericalLimit = 60f, momentumGuard = true },
         };
+        [Tooltip("Максимальная поправка стража за шаг, доля от |L|.")]
+        [SerializeField] float guardMaxFractionPerStep = 0.05f;
         [SerializeField] Scenario[] scenarios = { Scenario.Idle, Scenario.Spin, Scenario.Flip, Scenario.Drop };
 
         public RiderBuildSettings rider = new RiderBuildSettings();
         public ScooterBuildSettings scooter = new ScooterBuildSettings { stabilizers = true };
         public CouplingSettings coupling = new CouplingSettings();
-        public WheelFrictionTuning wheels = new WheelFrictionTuning();
 
         struct Metrics
         {
-            public float MaxGrip, SumGrip, MaxGripSettled, MaxFoot, MaxSpeed, MaxDeltaL, PelvisSag;
+            public float MaxGrip, SumGrip, MaxGripSettled, MaxFoot, MaxSpeed, MaxDeltaL, PelvisSag, GuardTotal;
             public int Samples;
             public bool Exploded;
         }
@@ -137,13 +141,16 @@ namespace ScootFoma.Spikes
 
             float height = sc == Scenario.Idle ? 0f : sc == Scenario.Drop ? 1.5f : 20f;
             var pose = new Pose(new Vector3(0f, height, 0f), Quaternion.identity);
-            rig = SpikeRig.Build($"S1 {cfg.name} {sc}", pose, loop, interpolator, s, wheels, rider, c, scooterMaterial, riderMaterial, cfg.gyroscopic);
+            var r = JsonUtility.FromJson<RiderBuildSettings>(JsonUtility.ToJson(rider));
+            if (cfg.sphericalLimit >= 0f) r.sphericalLimit = cfg.sphericalLimit;
+
+            rig = SpikeRig.Build($"S1 {cfg.name} {sc}", pose, loop, interpolator, s, r, c, scooterMaterial, riderMaterial);
             if (followCamera != null) followCamera.Target = rig.Focus;
 
             runTime = 0f;
             m = default;
             pendingInitialMotion = true;
-            initialPelvisHeight = rig.Rider.Pelvis.transform.position.y - rig.Scooter.Deck.position.y;
+            initialPelvisHeight = rig.Rider.Pelvis.transform.position.y - rig.Scooter.Deck.transform.position.y;
         }
 
         public void PrePhysics(float dt)
@@ -187,10 +194,13 @@ namespace ScootFoma.Spikes
                     var (ls, lr) = rig.AngularMomentumSplit();
                     Debug.Log($"[S1 L] {CurrentConfig.name} {sc} t={runTime:F2} L_самокат={ls:F2} L_райдер={lr:F2} ω_таз={rig.Rider.Pelvis.angularVelocity:F2} ω_дека={rig.Scooter.Deck.angularVelocity:F2}");
                 }
+                // Страж правит скорости после шага; ΔL ниже — остаток после его поправки.
+                if (CurrentConfig.momentumGuard && runTime > dt * 1.5f)
+                    m.GuardTotal += rig.GuardAngularMomentum(initialL, guardMaxFractionPerStep).magnitude;
                 float l0 = initialL.magnitude;
                 if (l0 > 1e-3f) m.MaxDeltaL = Mathf.Max(m.MaxDeltaL, (rig.AngularMomentumAboutCom() - initialL).magnitude / l0);
             }
-            float pelvisHeight = rig.Rider.Pelvis.transform.position.y - rig.Scooter.Deck.position.y;
+            float pelvisHeight = rig.Rider.Pelvis.transform.position.y - rig.Scooter.Deck.transform.position.y;
             m.PelvisSag = Mathf.Max(m.PelvisSag, initialPelvisHeight - pelvisHeight);
 
             if (runTime >= Duration(sc) || m.Exploded)
@@ -205,10 +215,10 @@ namespace ScootFoma.Spikes
             var cfg = CurrentConfig;
             var sc = CurrentScenario;
             string line = string.Format(
-                "[S1] {0,-18} {1,-5} хват max={2,6:F1}мм ср={3,5:F1}мм после_осадки={4,6:F1}мм | стопа={5,6:F1}мм | таз_осел={6,5:F0}мм | ΔL={7,5:P1} | vmax={8,5:F1} {9}",
+                "[S1] {0,-18} {1,-5} хват max={2,6:F1}мм ср={3,5:F1}мм после_осадки={4,6:F1}мм | стопа={5,6:F1}мм | таз_осел={6,5:F0}мм | ΔL={7,5:P1} | страж Σ|Δω|={8,5:F2}рад/с | vmax={9,5:F1} {10}",
                 cfg.name, sc, m.MaxGrip * 1000f, m.Samples > 0 ? m.SumGrip / m.Samples * 1000f : 0f,
                 m.MaxGripSettled * 1000f, m.MaxFoot * 1000f, m.PelvisSag * 1000f,
-                m.MaxDeltaL, m.MaxSpeed, m.Exploded ? "ВЗРЫВ" : "");
+                m.MaxDeltaL, m.GuardTotal, m.MaxSpeed, m.Exploded ? "ВЗРЫВ" : "");
             results.Add(line);
             Debug.Log(line);
         }
@@ -217,7 +227,7 @@ namespace ScootFoma.Spikes
         {
             finished = true;
             loop.Speed = 1f;
-            loop.MaxTicksPerFrame = 8;
+            loop.MaxTicksPerFrame = 16;
             var sb = new StringBuilder("[S1] ИТОГ\n");
             foreach (var r in results) sb.AppendLine(r);
             Debug.Log(sb.ToString());
@@ -226,7 +236,7 @@ namespace ScootFoma.Spikes
             runIndex = -1;
             loop.SetPhysicsHz(configs[0].hz);
             rig = SpikeRig.Build("S1 inspect", new Pose(Vector3.zero, Quaternion.identity), loop, interpolator,
-                scooter, wheels, rider, coupling, scooterMaterial, riderMaterial);
+                scooter, rider, coupling, scooterMaterial, riderMaterial);
             if (followCamera != null) followCamera.Target = rig.Focus;
         }
 

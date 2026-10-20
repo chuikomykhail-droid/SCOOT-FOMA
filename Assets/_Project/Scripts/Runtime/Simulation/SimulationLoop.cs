@@ -8,8 +8,8 @@ namespace ScootFoma.Simulation
     [DefaultExecutionOrder(-1000)]
     public sealed class SimulationLoop : MonoBehaviour
     {
-        [SerializeField, Min(30f)] float physicsHz = 120f;
-        [SerializeField, Min(1)] int maxTicksPerFrame = 8;
+        [SerializeField, Min(30f)] float physicsHz = 240f;
+        [SerializeField, Min(1)] int maxTicksPerFrame = 16;
         [Tooltip("Скорость симуляции: 0.25 — замедление для разбора трюков, >1 — ускоренный прогон тестов.")]
         [SerializeField, Min(0f)] float speed = 1f;
         [SerializeField] bool paused;
