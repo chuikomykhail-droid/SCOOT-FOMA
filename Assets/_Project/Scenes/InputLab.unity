@@ -167,7 +167,8 @@ MonoBehaviour:
   loop: {fileID: 1255666493}
   actions: {fileID: -944628639613478452, guid: 1fe9f05488a55084093adff1611af423, type: 3}
   tuning: {fileID: 11400000, guid: e1d85682d43a3b44e8511e8b2c5ccd7b, type: 2}
-  replay: {fileID: 0}
+  replay: {fileID: 11400000, guid: e911fb2d0be772843a2cf87eb15a1d81, type: 2}
+  loopReplay: 1
   recordKey: 98
   recordingsFolder: Assets/_Project/Recordings
 --- !u!4 &947839133

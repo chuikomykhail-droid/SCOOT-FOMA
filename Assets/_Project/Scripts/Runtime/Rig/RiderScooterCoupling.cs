@@ -84,7 +84,7 @@ namespace ScootFoma.Rig
             foreach (var ab in rider.All) sum += ab.dofCount;
             JointDofSum = sum;
 
-            loop.Register(this);
+            if (loop != null) loop.Register(this); // без цикла шаги вызывает тест вручную
         }
 
         Hand CreateHand(string name, ArticulationBody forearm, Vector3 handLocal, Vector3 gripLocal)

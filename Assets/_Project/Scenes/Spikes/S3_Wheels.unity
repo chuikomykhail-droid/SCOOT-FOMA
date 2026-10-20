@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &73627704
+--- !u!1 &446282218
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,108 +127,62 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 73627708}
-  - component: {fileID: 73627707}
-  - component: {fileID: 73627706}
-  - component: {fileID: 73627705}
+  - component: {fileID: 446282221}
+  - component: {fileID: 446282220}
+  - component: {fileID: 446282219}
   m_Layer: 0
-  m_Name: Main Camera
-  m_TagString: MainCamera
+  m_Name: Simulation
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &73627705
+--- !u!114 &446282219
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73627704}
+  m_GameObject: {fileID: 446282218}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6f602403568e26b4c8a22ff5a6c0683b, type: 3}
+  m_Script: {fileID: 11500000, guid: a54e898b831a6ed459072e8f940abce7, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Presentation.FollowCamera
-  target: {fileID: 0}
-  offset: {x: 2.5, y: 1.6, z: -3.5}
-  positionSharpness: 6
-  followTargetYaw: 0
---- !u!81 &73627706
-AudioListener:
+  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Presentation.PoseInterpolator
+  loop: {fileID: 446282220}
+  interpolate: 1
+--- !u!114 &446282220
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73627704}
+  m_GameObject: {fileID: 446282218}
   m_Enabled: 1
---- !u!20 &73627707
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73627704}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
-    serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.05
-  far clip plane: 1000
-  field of view: 60
-  orthographic: 0
-  orthographic size: 5
-  m_Depth: 0
-  m_CullingMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
---- !u!4 &73627708
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 331e8a67e3435b040b00b63e3bc4a29f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Simulation.SimulationLoop
+  physicsHz: 240
+  maxTicksPerFrame: 16
+  speed: 1
+  paused: 0
+--- !u!4 &446282221
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 73627704}
+  m_GameObject: {fileID: 446282218}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.13964309, y: -0.3366501, z: 0.050557774, w: 0.9298443}
-  m_LocalPosition: {x: 2.5, y: 1.8, z: -3}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &314136648
+--- !u!1 &665985640
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -236,8 +190,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 314136650}
-  - component: {fileID: 314136649}
+  - component: {fileID: 665985642}
+  - component: {fileID: 665985641}
   m_Layer: 0
   m_Name: Directional Light
   m_TagString: Untagged
@@ -245,13 +199,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!108 &314136649
+--- !u!108 &665985641
 Light:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 314136648}
+  m_GameObject: {fileID: 665985640}
   m_Enabled: 1
   serializedVersion: 13
   m_Type: 1
@@ -310,13 +264,13 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
---- !u!4 &314136650
+--- !u!4 &665985642
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 314136648}
+  m_GameObject: {fileID: 665985640}
   serializedVersion: 2
   m_LocalRotation: {x: 0.40821794, y: -0.23456973, z: 0.10938166, w: 0.8754261}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -325,7 +279,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &586900674
+--- !u!1 &1140934861
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -333,8 +287,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 586900676}
-  - component: {fileID: 586900675}
+  - component: {fileID: 1140934863}
+  - component: {fileID: 1140934862}
   m_Layer: 0
   m_Name: S3 Wheel Spike
   m_TagString: Untagged
@@ -342,21 +296,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &586900675
+--- !u!114 &1140934862
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 586900674}
+  m_GameObject: {fileID: 1140934861}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1220f1ceb035c3c4a99fbf9bec7c7f15, type: 3}
   m_Name: 
   m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Spikes.S3WheelSpike
-  loop: {fileID: 1167098188}
-  interpolator: {fileID: 1167098187}
-  followCamera: {fileID: 73627705}
+  loop: {fileID: 446282220}
+  interpolator: {fileID: 446282219}
+  followCamera: {fileID: 2059346511}
   scooterMaterial: {fileID: 2100000, guid: f2c6b2a6e4558ce4aba33a1e58a70c9b, type: 2}
   groundMaterial: {fileID: 2100000, guid: 918e1be2c429fe041ad02f6725d290cb, type: 2}
   runs:
@@ -397,19 +351,21 @@ MonoBehaviour:
   loadInertia: {x: 12, y: 2.5, z: 12}
   rollAssistStiffness: 3000
   rollAssistDamping: 300
+  rollAssistMaxAngle: 30
+  rollAssistMaxTorque: 800
   straightSpeed: 5
   turnSpeed: 4
   turnSteerDegrees: 8
   bumpZ: 8
   bumpHeight: 0.02
   duration: 4
---- !u!4 &586900676
+--- !u!4 &1140934863
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 586900674}
+  m_GameObject: {fileID: 1140934861}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -418,7 +374,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1167098186
+--- !u!1 &2059346510
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -426,56 +382,102 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1167098189}
-  - component: {fileID: 1167098188}
-  - component: {fileID: 1167098187}
+  - component: {fileID: 2059346514}
+  - component: {fileID: 2059346513}
+  - component: {fileID: 2059346512}
+  - component: {fileID: 2059346511}
   m_Layer: 0
-  m_Name: Simulation
-  m_TagString: Untagged
+  m_Name: Main Camera
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1167098187
+--- !u!114 &2059346511
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167098186}
+  m_GameObject: {fileID: 2059346510}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a54e898b831a6ed459072e8f940abce7, type: 3}
+  m_Script: {fileID: 11500000, guid: 6f602403568e26b4c8a22ff5a6c0683b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Presentation.PoseInterpolator
-  loop: {fileID: 1167098188}
-  interpolate: 1
---- !u!114 &1167098188
-MonoBehaviour:
+  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Presentation.FollowCamera
+  target: {fileID: 0}
+  offset: {x: 2.5, y: 1.6, z: -3.5}
+  positionSharpness: 6
+  followTargetYaw: 0
+--- !u!81 &2059346512
+AudioListener:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167098186}
+  m_GameObject: {fileID: 2059346510}
   m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 331e8a67e3435b040b00b63e3bc4a29f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: ScootFoma.Runtime::ScootFoma.Simulation.SimulationLoop
-  physicsHz: 240
-  maxTicksPerFrame: 16
-  speed: 1
-  paused: 0
---- !u!4 &1167098189
+--- !u!20 &2059346513
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2059346510}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.05
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &2059346514
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1167098186}
+  m_GameObject: {fileID: 2059346510}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: 0.13964309, y: -0.3366501, z: 0.050557774, w: 0.9298443}
+  m_LocalPosition: {x: 2.5, y: 1.8, z: -3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -485,7 +487,7 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 314136650}
-  - {fileID: 73627708}
-  - {fileID: 1167098189}
-  - {fileID: 586900676}
+  - {fileID: 665985642}
+  - {fileID: 2059346514}
+  - {fileID: 446282221}
+  - {fileID: 1140934863}

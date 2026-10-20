@@ -53,6 +53,9 @@ namespace ScootFoma.Spikes
         [Tooltip("Тестовая стабилизация крена: без райдера самокат с грузом падает набок.")]
         public float rollAssistStiffness = 3000f;
         public float rollAssistDamping = 300f;
+        [Tooltip("Стабилизатор выключается, если крен больше этого: иначе он раскручивает и подбрасывает упавший самокат.")]
+        public float rollAssistMaxAngle = 30f;
+        public float rollAssistMaxTorque = 800f;
         [Header("Тесты")]
         public float straightSpeed = 5f;
         public float turnSpeed = 4f;
@@ -236,7 +239,12 @@ namespace ScootFoma.Spikes
             Vector3 upTarget = Vector3.ProjectOnPlane(Vector3.up, forward).normalized;
             float rollError = Vector3.SignedAngle(deck.transform.up, upTarget, forward) * Mathf.Deg2Rad;
             float rollRate = Vector3.Dot(deck.angularVelocity, forward);
-            deck.AddTorque(forward * (rollError * rollAssistStiffness - rollRate * rollAssistDamping));
+            // Только пока самокат почти вертикален и с ограниченным моментом: упавший самокат оставляем лежать.
+            if (Mathf.Abs(rollError) * Mathf.Rad2Deg <= rollAssistMaxAngle && Vector3.Dot(deck.transform.up, Vector3.up) > 0f)
+            {
+                float torque = Mathf.Clamp(rollError * rollAssistStiffness - rollRate * rollAssistDamping, -rollAssistMaxTorque, rollAssistMaxTorque);
+                deck.AddTorque(forward * torque);
+            }
         }
 
         public void PostPhysics(float dt)

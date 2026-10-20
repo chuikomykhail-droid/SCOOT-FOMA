@@ -30,6 +30,14 @@ namespace ScootFoma.Rig
         public float wheelRollingDamping;
         public float wheelFriction = 1.0f;
         public float deckFriction = 1.2f;
+
+        [Header("Податливость колеса (промин полиуретана)")]
+        [Tooltip("Жёсткость, Н/м. 0 — колесо абсолютно жёсткое. Абсолютно жёсткая система на мелком препятствии " +
+                 "получает вертикальный удар v·tg(угла склона) и подлетает.")]
+        public float wheelSuspensionStiffness = 400000f;
+        public float wheelSuspensionDamping = 2000f;
+        [Tooltip("Ход в каждую сторону, м.")]
+        public float wheelSuspensionTravel = 0.006f;
     }
 
     public sealed class ScooterParts
@@ -132,6 +140,30 @@ namespace ScootFoma.Rig
         static ArticulationBody Wheel(string name, Transform parent, int layer, Vector3 position, Quaternion rotation,
             ScooterBuildSettings s, PhysicsMaterial mat)
         {
+            if (s.wheelSuspensionStiffness > 0f)
+            {
+                // Ступица на призматическом суставе вдоль вертикали рига: моделирует промин колеса.
+                var hubGo = Node(name + "Hub", parent, layer, position, rotation);
+                var hub = Link(hubGo, 0.05f);
+                hub.automaticInertiaTensor = false;
+                hub.inertiaTensor = Vector3.one * 1e-4f;
+                hub.jointType = ArticulationJointType.PrismaticJoint;
+                hub.matchAnchors = true;
+                hub.anchorPosition = Vector3.zero;
+                hub.anchorRotation = Quaternion.Euler(0f, 0f, 90f); // ось X якоря = вертикаль
+                hub.linearLockX = ArticulationDofLock.LimitedMotion;
+                hub.xDrive = new ArticulationDrive
+                {
+                    driveType = ArticulationDriveType.Force,
+                    stiffness = s.wheelSuspensionStiffness,
+                    damping = s.wheelSuspensionDamping,
+                    forceLimit = float.MaxValue,
+                    lowerLimit = -s.wheelSuspensionTravel,
+                    upperLimit = s.wheelSuspensionTravel,
+                };
+                parent = hubGo.transform;
+            }
+
             var go = Node(name, parent, layer, position, rotation);
             var c = go.AddComponent<SphereCollider>();
             c.radius = s.wheelRadius;
